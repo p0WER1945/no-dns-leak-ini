@@ -1,0 +1,230 @@
+# 机场订阅配置
+proxy-providers:
+  sub0:
+    url: "订阅地址, 保留引号"
+    type: http
+    interval: 86400
+    health-check:
+      enable: true
+      url: http://www.gstatic.com/generate_204
+      interval: 300
+    proxy: 直连
+
+  # sub1:
+  #   url: "订阅地址, 保留引号"
+  #   type: http
+  #   interval: 86400
+  #   health-check:
+  #     enable: true
+  #     url: http://www.gstatic.com/generate_204
+  #     interval: 300
+  #   proxy: 直连
+
+# 基本配置
+port: 7890
+socks-port: 7891
+mixed-port: 7893
+allow-lan: true
+bind-address: "*"
+mode: rule
+log-level: info
+ipv6: false
+
+# DNS 配置
+dns:
+  enable: true
+  listen: 0.0.0.0:53
+  enhanced-mode: fake-ip
+  fake-ip-range: 198.18.0.1/16
+  nameserver:
+    - 223.5.5.5
+    - 119.29.29.29
+  fallback:
+    - 8.8.8.8
+    - 1.1.1.1
+
+# 代理配置（机场订阅会自动提供节点，这里只需要保留必要的直连代理）
+proxies:
+  - name: "直连"
+    type: direct
+
+# 代理组配置
+proxy-groups:
+  # 主要节点选择组
+  - name: 🚀 节点选择
+    type: select
+    proxies:
+      - 🇸🇬 新加坡-自动
+      - 🇭🇰 香港-自动
+      - 🇨🇳 台湾-自动
+      - 🇯🇵 日本-自动
+      - 🇺🇸 美国-自动
+      - 直连
+    use:
+      - sub0
+      - sub1
+
+  # 新加坡自动选择
+  - name: 🇸🇬 新加坡-自动
+    type: url-test
+    use:
+      - sub0
+      - sub1
+    filter: "(?i)(新加坡|SG|坡|狮城|Singapore)"
+    url: http://www.gstatic.com/generate_204
+    interval: 300
+    tolerance: 5
+    timeout: 50
+  
+  # 香港自动选择
+  - name: 🇭🇰 香港-自动
+    type: url-test
+    use:
+      - sub0
+      - sub1
+    filter: "(?i)(香港|HK|Hong Kong|HongKong)"
+    url: http://www.gstatic.com/generate_204
+    interval: 300
+    tolerance: 5
+    timeout: 50
+  
+  # 台湾自动选择
+  - name: 🇨🇳 台湾-自动
+    type: url-test
+    use:
+      - sub0
+      - sub1
+    filter: "(?i)(台湾|台灣|TW|Taiwan)"
+    url: http://www.gstatic.com/generate_204
+    interval: 300
+    tolerance: 5
+    timeout: 50
+  
+  # 日本自动选择
+  - name: 🇯🇵 日本-自动
+    type: url-test
+    use:
+      - sub0
+      - sub1
+    filter: "(?i)(日本|JP|东京|大阪|Japan)"
+    url: http://www.gstatic.com/generate_204
+    interval: 300
+    tolerance: 5
+    timeout: 50
+  
+  # 美国自动选择
+  - name: 🇺🇸 美国-自动
+    type: url-test
+    use:
+      - sub0
+      - sub1
+    filter: "(?i)(美|US|纽约|洛杉|United States)"
+    url: http://www.gstatic.com/generate_204
+    interval: 300
+    tolerance: 5
+    timeout: 50
+
+# 规则匹配部分
+rules:
+  # 直接域名规则
+  - DOMAIN-SUFFIX,xn--ngstr-lra8j.com,🚀 节点选择
+  - DOMAIN-SUFFIX,services.googleapis.cn,🚀 节点选择
+  
+  # 外部规则集 - Google CN 代理
+  - RULE-SET,google_cn_proxy,🚀 节点选择
+  
+  # 本地网络和解封规则 - 直连
+  - RULE-SET,local_area_network,直连
+  - RULE-SET,unban,直连
+  
+  # 中国域名和媒体 - 直连
+  - RULE-SET,china_domain,直连
+  - RULE-SET,china_media,直连
+  
+  # 广告拦截规则
+  - RULE-SET,ban_ad,REJECT
+  - RULE-SET,ban_program_ad,REJECT
+  
+  # 中国IP相关 - 直连
+  - RULE-SET,china_company_ip,直连,no-resolve
+  - RULE-SET,china_ip,直连,no-resolve
+  
+  # 地理位置规则
+  - GEOIP,CN,直连,no-resolve
+  
+  # 兜底规则
+  - MATCH,🚀 节点选择
+
+# 规则集配置
+rule-providers:
+  # Google CN 代理IP规则集
+  google_cn_proxy:
+    type: http
+    behavior: classical
+    url: "https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/Ruleset/GoogleCNProxyIP.list"
+    path: ./ruleset/GoogleCNProxyIP.list
+    interval: 86400
+  
+  # 本地网络规则集
+  local_area_network:
+    type: http
+    behavior: classical
+    url: "https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/LocalAreaNetwork.list"
+    path: ./ruleset/LocalAreaNetwork.list
+    interval: 86400
+  
+  # 解封规则集
+  unban:
+    type: http
+    behavior: classical
+    url: "https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/UnBan.list"
+    path: ./ruleset/UnBan.list
+    interval: 86400
+  
+  # 中国域名规则集
+  china_domain:
+    type: http
+    behavior: classical
+    url: "https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/ChinaDomain.list"
+    path: ./ruleset/ChinaDomain.list
+    interval: 86400
+  
+  # 中国媒体规则集
+  china_media:
+    type: http
+    behavior: classical
+    url: "https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/ChinaMedia.list"
+    path: ./ruleset/ChinaMedia.list
+    interval: 86400
+  
+  # 广告拦截规则集
+  ban_ad:
+    type: http
+    behavior: classical
+    url: "https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/BanAD.list"
+    path: ./ruleset/BanAD.list
+    interval: 86400
+  
+  # 程序广告拦截规则集
+  ban_program_ad:
+    type: http
+    behavior: classical
+    url: "https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/BanProgramAD.list"
+    path: ./ruleset/BanProgramAD.list
+    interval: 86400
+  
+  # 中国公司IP规则集
+  china_company_ip:
+    type: http
+    behavior: ipcidr
+    url: "https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/ChinaCompanyIp.list"
+    path: ./ruleset/ChinaCompanyIp.list
+    interval: 86400
+  
+  # 中国IP规则集
+  china_ip:
+    type: http
+    behavior: ipcidr
+    url: "https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/ChinaIp.list"
+    path: ./ruleset/ChinaIp.list
+    interval: 86400
