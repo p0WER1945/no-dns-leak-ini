@@ -54,7 +54,6 @@ proxy-groups:
   - name: 🚀 节点选择
     type: select
     proxies:
-      - ♻️ 自动选择
       - 🇸🇬 新加坡-自动
       - 🇭🇰 香港-自动
       - 🇨🇳 台湾-自动
@@ -62,15 +61,6 @@ proxy-groups:
       - 🇺🇸 美国-自动
       - 直连
     include-all: true
-  
-  # 自动选择组 - 全部节点测速
-  - name: ♻️ 自动选择
-    type: url-test
-    include-all: true
-    url: http://www.gstatic.com/generate_204
-    interval: 300
-    tolerance: 5
-    timeout: 50
   
   # 新加坡自动选择
   - name: 🇸🇬 新加坡-自动
