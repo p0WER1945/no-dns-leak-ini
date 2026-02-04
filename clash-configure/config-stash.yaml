@@ -1,4 +1,6 @@
+# =========================
 # 机场订阅配置
+# =========================
 proxy-providers:
   sub0:
     url: "订阅地址, 保留引号"
@@ -20,7 +22,9 @@ proxy-providers:
   #     interval: 300
   #   proxy: 直连
 
-# 基本配置
+# =========================
+# 基础配置
+# =========================
 port: 7890
 socks-port: 7891
 mixed-port: 7893
@@ -30,21 +34,63 @@ mode: rule
 log-level: info
 ipv6: false
 
-# DNS 配置
+# 【优化】开启 TCP 并发，显著降低握手延迟
+tcp-concurrent: true
+
+# 【优化】模拟 TLS 指纹，防止被某些服务端识别为代理工具
+global-client-fingerprint: chrome
+
+# =========================
+# DNS 配置 (防泄露核心)
+# =========================
 dns:
   enable: true
   listen: 0.0.0.0:53
   enhanced-mode: fake-ip
   fake-ip-range: 198.18.0.1/16
-  nameserver:
+  
+  # 【优化】防止系统连接检测误报，导致无法联网
+  fake-ip-filter:
+    - "*.lan"
+    - "*.localdomain"
+    - "*.localhost"
+    - "*.local"
+    - "msftconnecttest.com"
+    - "msftncsi.com"
+    - "succ.html"
+    - "time.*.com"
+    - "time.*.gov"
+    - "time.*.edu.cn"
+    - "time.*.apple.com"
+  
+  # 默认 DNS (用于解析 DoH 域名的 IP)
+  default-nameserver:
     - 223.5.5.5
     - 119.29.29.29
-  fallback:
-    - 8.8.8.8
-    - 1.1.1.1
 
-# 代理配置（机场订阅会自动提供节点，这里只需要保留必要的直连代理）
+  # 国内域名 DNS (建议使用阿里和腾讯的 DoH，防止 53 端口劫持)
+  nameserver:
+    - https://dns.alidns.com/dns-query
+    - https://doh.pub/dns-query
+
+  # 国外域名 fallback (当国内 DNS 解析结果是污染 IP 时回退到这里)
+  fallback:
+    - https://dns.google/dns-query
+    - https://1.1.1.1/dns-query
+    - tls://8.8.4.4:853
+
+  fallback-filter:
+    geoip: true
+    geoip-code: CN
+    ipcidr:
+      - 240.0.0.0/4
+      - 0.0.0.0/32
+
+# =========================
+# 代理节点 (此处需要保留你订阅中的节点)
+# =========================
 proxies:
+  # ⚠️ 请确保这里有你的机场节点，或者由外部订阅管理
   - name: "直连"
     type: direct
 
@@ -73,7 +119,7 @@ proxy-groups:
     filter: "(?i)(新加坡|SG|坡|狮城|Singapore)"
     url: http://www.gstatic.com/generate_204
     interval: 300
-    tolerance: 5
+    tolerance: 50
     timeout: 50
   
   # 香港自动选择
@@ -85,7 +131,7 @@ proxy-groups:
     filter: "(?i)(香港|HK|Hong Kong|HongKong)"
     url: http://www.gstatic.com/generate_204
     interval: 300
-    tolerance: 5
+    tolerance: 50
     timeout: 50
   
   # 台湾自动选择
@@ -97,7 +143,7 @@ proxy-groups:
     filter: "(?i)(台湾|台灣|TW|Taiwan)"
     url: http://www.gstatic.com/generate_204
     interval: 300
-    tolerance: 5
+    tolerance: 50
     timeout: 50
   
   # 日本自动选择
@@ -109,7 +155,7 @@ proxy-groups:
     filter: "(?i)(日本|JP|东京|大阪|Japan)"
     url: http://www.gstatic.com/generate_204
     interval: 300
-    tolerance: 5
+    tolerance: 50
     timeout: 50
   
   # 美国自动选择
@@ -121,110 +167,122 @@ proxy-groups:
     filter: "(?i)(美|US|纽约|洛杉|United States)"
     url: http://www.gstatic.com/generate_204
     interval: 300
-    tolerance: 5
+    tolerance: 50
     timeout: 50
 
-# 规则匹配部分
+# =========================
+# 规则部分 (从上到下匹配)
+# =========================
 rules:
+  # 1. 阻断 QUIC/HTTP3 (防止 Google 绕过代理) - 必须放在最前面
+  - AND,((NETWORK,UDP),(DST-PORT,443)),REJECT
+  
+  # 2. 阻断 WebRTC (防止浏览器泄露)
+  - DOMAIN-SUFFIX,stun.l.google.com,REJECT
+  
+  # ============================================
+  # 【新增】强制 Google 域名走代理 (双重保险)
+  # 放在规则集之前，防止规则集漏掉
+  # ============================================
+  - DOMAIN-SUFFIX,google.com,🚀 节点选择
+  - DOMAIN-SUFFIX,google.co.jp,🚀 节点选择
+  - DOMAIN-KEYWORD,google,🚀 节点选择
+  - DOMAIN-KEYWORD,gmail,🚀 节点选择
+  - DOMAIN-KEYWORD,youtube,🚀 节点选择
+  
   # 直接域名规则
   - DOMAIN-SUFFIX,xn--ngstr-lra8j.com,🚀 节点选择
   - DOMAIN-SUFFIX,services.googleapis.cn,🚀 节点选择
   
-  # 外部规则集 - Google CN 代理
+  # 外部规则集
   - RULE-SET,google_cn_proxy,🚀 节点选择
   
-  # 本地网络和解封规则 - 直连
+  # 本地网络和解封规则
   - RULE-SET,local_area_network,直连
   - RULE-SET,unban,直连
   
-  # 中国域名和媒体 - 直连
+  # 中国域名和媒体
   - RULE-SET,china_domain,直连
   - RULE-SET,china_media,直连
   
-  # 广告拦截规则
+  # 广告拦截
   - RULE-SET,ban_ad,REJECT
   - RULE-SET,ban_program_ad,REJECT
   
-  # 中国IP相关 - 直连
+  # 中国 IP 相关
   - RULE-SET,china_company_ip,直连,no-resolve
   - RULE-SET,china_ip,直连,no-resolve
   
-  # 地理位置规则
+  # GeoIP 兜底 (防止规则集漏网)
   - GEOIP,CN,直连,no-resolve
   
-  # 兜底规则
+  # 最终兜底
   - MATCH,🚀 节点选择
 
-# 规则集配置
+# =========================
+# 规则集配置 (优化为 CDN 加速地址)
+# =========================
 rule-providers:
-  # Google CN 代理IP规则集
+  # 【优化】所有 URL 已替换为 jsdelivr CDN，解决 GitHub 访问慢/失败导致无法启动的问题
   google_cn_proxy:
     type: http
     behavior: classical
-    url: "https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/Ruleset/GoogleCNProxyIP.list"
+    url: "https://cdn.jsdelivr.net/gh/ACL4SSR/ACL4SSR@master/Clash/Ruleset/GoogleCNProxyIP.list"
     path: ./ruleset/GoogleCNProxyIP.list
     interval: 86400
   
-  # 本地网络规则集
   local_area_network:
     type: http
     behavior: classical
-    url: "https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/LocalAreaNetwork.list"
+    url: "https://cdn.jsdelivr.net/gh/ACL4SSR/ACL4SSR@master/Clash/LocalAreaNetwork.list"
     path: ./ruleset/LocalAreaNetwork.list
     interval: 86400
   
-  # 解封规则集
   unban:
     type: http
     behavior: classical
-    url: "https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/UnBan.list"
+    url: "https://cdn.jsdelivr.net/gh/ACL4SSR/ACL4SSR@master/Clash/UnBan.list"
     path: ./ruleset/UnBan.list
     interval: 86400
   
-  # 中国域名规则集
   china_domain:
     type: http
     behavior: classical
-    url: "https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/ChinaDomain.list"
+    url: "https://cdn.jsdelivr.net/gh/ACL4SSR/ACL4SSR@master/Clash/ChinaDomain.list"
     path: ./ruleset/ChinaDomain.list
     interval: 86400
   
-  # 中国媒体规则集
   china_media:
     type: http
     behavior: classical
-    url: "https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/ChinaMedia.list"
+    url: "https://cdn.jsdelivr.net/gh/ACL4SSR/ACL4SSR@master/Clash/ChinaMedia.list"
     path: ./ruleset/ChinaMedia.list
     interval: 86400
   
-  # 广告拦截规则集
   ban_ad:
     type: http
     behavior: classical
-    url: "https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/BanAD.list"
+    url: "https://cdn.jsdelivr.net/gh/ACL4SSR/ACL4SSR@master/Clash/BanAD.list"
     path: ./ruleset/BanAD.list
     interval: 86400
   
-  # 程序广告拦截规则集
   ban_program_ad:
     type: http
     behavior: classical
-    url: "https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/BanProgramAD.list"
+    url: "https://cdn.jsdelivr.net/gh/ACL4SSR/ACL4SSR@master/Clash/BanProgramAD.list"
     path: ./ruleset/BanProgramAD.list
     interval: 86400
   
-  # 中国公司IP规则集
   china_company_ip:
     type: http
     behavior: ipcidr
-    url: "https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/ChinaCompanyIp.list"
+    url: "https://cdn.jsdelivr.net/gh/ACL4SSR/ACL4SSR@master/Clash/ChinaCompanyIp.list"
     path: ./ruleset/ChinaCompanyIp.list
     interval: 86400
   
-  # 中国IP规则集
   china_ip:
     type: http
     behavior: ipcidr
-    url: "https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/ChinaIp.list"
+    url: "https://cdn.jsdelivr.net/gh/ACL4SSR/ACL4SSR@master/Clash/ChinaIp.list"
     path: ./ruleset/ChinaIp.list
     interval: 86400
