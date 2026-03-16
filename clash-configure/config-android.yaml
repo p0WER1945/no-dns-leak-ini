@@ -3,7 +3,7 @@
 # =========================
 proxy-providers:
   Airplane:
-    url: "http://xxxxxxx"
+    url: "http://xxxxxx"
     type: http
     interval: 2592000
     health-check:
@@ -18,88 +18,83 @@ proxy-providers:
 port: 7890
 socks-port: 7891
 mixed-port: 7893
-allow-lan: true
-bind-address: "*"
+allow-lan: false
 mode: rule
-log-level: info
+log-level: inf
 ipv6: false
-
-# 【优化】开启 TCP 并发，显著降低握手延迟
 tcp-concurrent: true
-
-# 【优化】模拟 TLS 指纹，防止被某些服务端识别为代理工具
 global-client-fingerprint: chrome
 
 # =========================
-# DNS 配置 (防泄露核心)
+# DNS 配置（核心修复）
 # =========================
 dns:
   enable: true
-  listen: 0.0.0.0:53
   enhanced-mode: fake-ip
   fake-ip-range: 198.18.0.1/16
-  
-  # 【优化】防止系统连接检测误报，导致无法联网
+  listen: 0.0.0.0:1053
+
   fake-ip-filter:
     - "*.lan"
-    - "*.localdomain"
-    - "*.localhost"
     - "*.local"
+    - "*.localhost"
+    - "*.localdomain"
     - "msftconnecttest.com"
     - "msftncsi.com"
-    - "succ.html"
+    - "+.ntp.org"
     - "time.*.com"
     - "time.*.gov"
     - "time.*.edu.cn"
-    - "time.*.apple.com"
+    - "ntp.*.com"
+    - "+.pool.ntp.org"
+    - "time1.cloud.tencent.com"
+    # Android 连通性检测
+    - "connectivitycheck.gstatic.com"
+    - "connectivitycheck.android.com"
+    - "clients3.google.com"
+    - "clients1.google.com"
   
-  # 默认 DNS (用于解析 DoH 域名的 IP)
+  # 用于解析 nameserver 中的域名（必须是纯 IP）
   default-nameserver:
     - 223.5.5.5
     - 119.29.29.29
-    - 1.1.1.1
 
-  # 国内域名 DNS (建议使用阿里和腾讯的 DoH，防止 53 端口劫持)
+  # ✅ 国内 DNS 解析国内域名（可靠、无需代理）
   nameserver:
-    - 223.5.5.5
-    - 119.29.29.29
     - https://dns.alidns.com/dns-query
     - https://doh.pub/dns-query
 
-  # 国外域名 fallback (当国内 DNS 解析结果是污染 IP 时回退到这里)
-  fallback:
-    - https://dns.google/dns-query
-    - https://1.1.1.1/dns-query
-    - tls://8.8.4.4:853
-
-  fallback-filter:
-    geoip: true
-    geoip-code: CN
-    ipcidr:
-      - 240.0.0.0/4
-      - 0.0.0.0/32
-
+  # ✅ 用于解析被代理域名（走代理出去）
   nameserver-policy:
-    # 对于国内主流域名和私有地址，强制使用国内 DNS
-    "geosite:cn,private":
-      - 223.5.5.5
-      - https://dns.alidns.com/dns-query
-    # 对于容易被污染或强制走代理的域名，强制走远端解析
-    "geosite:google,youtube,telegram,gfw":
-      - "https://dns.google/dns-query#🚀 节点选择"
-      - "https://dns.cloudflare.com/dns-query#🚀 节点选择"
+    "geosite:geolocation-!cn":
+      - https://dns.google/dns-query
+      - https://dns.cloudflare.com/dns-query
+
+# ========================
+# Sniffer
+# =========================
+sniffer:
+  enable: true
+  force-dns-mapping: true
+  parse-pure-ip: true
+  sniff:
+    HTTP:
+      ports: [80, 8080-8880]
+      override-destination: true
+    TLS:
+      ports: [443, 8443]
 
 # =========================
-# 代理节点 (此处需要保留你订阅中的节点)
+# 代理节点
 # =========================
 proxies:
-  # ⚠️ 请确保这里有你的机场节点，或者由外部订阅管理
   - name: "直连"
     type: direct
 
+# =========================
 # 代理组配置
+# =========================
 proxy-groups:
-  # 主要节点选择组
   - name: 🚀 节点选择
     type: select
     proxies:
@@ -109,138 +104,88 @@ proxy-groups:
       - 🇯🇵 日本-自动
       - 🇺🇸 美国-自动
       - 直连
-    use:
-      - NaiUNet
-      - XMRth
-      - niceCloud
-      - gwYunDong
+    include-all: true
 
-  # 新加坡自动选择
   - name: 🇸🇬 新加坡-自动
     type: url-test
-    use:
-      - NaiUNet
-      - XMRth
-      - niceCloud
-      - gwYunDong
-    filter: "(?i)(新加坡|SG|坡|狮城|Singapore)"
-    url: http://www.gstatic.com/generate_204
+    include-all: true
+    filter: "(?i)(广新|新加坡|SG|坡|狮城|🇸🇬|Singapore)"
+    url: http://www.gstatic.com/generate_20
     interval: 300
     tolerance: 50
-    timeout: 50
-  
-  # 香港自动选择
+    timeout: 5000
+
   - name: 🇭🇰 香港-自动
     type: url-test
-    use:
-      - NaiUNet
-      - XMRth
-      - niceCloud
-      - gwYunDong
-    filter: "(?i)(香港|HK|Hong Kong|HongKong)"
+    include-all: true
+    filter: "(?i)(广港|香港|HK|Hong Kong|🇭🇰|HongKong)"
     url: http://www.gstatic.com/generate_204
     interval: 300
     tolerance: 50
-    timeout: 50
-  
-  # 台湾自动选择
+    timeout: 5000
+
   - name: 🇨🇳 台湾-自动
     type: url-test
-    use:
-      - NaiUNet
-      - XMRth
-      - niceCloud
-      - gwYunDong
-    filter: "(?i)(台湾|台灣|TW|Taiwan)"
+    include-all: true
+    filter: "(?i)(广台|台湾|台灣|TW|Tai Wan|🇹🇼|TaiWan|Taiwan)"
     url: http://www.gstatic.com/generate_204
     interval: 300
     tolerance: 50
-    timeout: 50
-  
-  # 日本自动选择
+    timeout: 5000
+
   - name: 🇯🇵 日本-自动
     type: url-test
-    use:
-      - NaiUNet
-      - XMRth
-      - niceCloud
-      - gwYunDong
-    filter: "(?i)(日本|JP|东京|大阪|Japan)"
+    include-all: true
+    filter: "(?i)(广日|日本|JP|川日|东京|大阪|泉日|埼玉|沪日|深日|🇯🇵|Japan)"
     url: http://www.gstatic.com/generate_204
     interval: 300
     tolerance: 50
-    timeout: 50
-  
-  # 美国自动选择
+    timeout: 5000
+
   - name: 🇺🇸 美国-自动
     type: url-test
-    use:
-      - NaiUNet
-      - XMRth
-      - niceCloud
-      - gwYunDong
-    filter: "(?i)(美|US|纽约|洛杉|United States)"
+    include-all: true
+    filter: "(?i)(广美|美|US|纽约|波特兰|达拉斯|俄勒|凤凰城|费利蒙|硅谷|拉斯|洛杉|圣何塞|圣克拉|西雅|芝加|🇺🇸|United States)"
     url: http://www.gstatic.com/generate_204
     interval: 300
     tolerance: 50
-    timeout: 50
+    timeout: 5000
 
 # =========================
-# 规则部分
+# 规则部分（修复版）
 # =========================
 rules:
-  # 1.1 拦截类（最优先）
-  - AND,((NETWORK,UDP),(DST-PORT,443)),REJECT # 阻断 QUIC
-  - AND,((NETWORK,UDP),(DST-PORT,3478)),REJECT
-  - AND,((NETWORK,UDP),(DST-PORT,19302)),REJECT
-  # - NETWORK,UDP,REJECT
-  - RULE-SET,ban_ad,REJECT
-  - RULE-SET,ban_program_ad,REJECT
-  - DOMAIN-KEYWORD,stun,REJECT
-  # 1.2. 阻断 WebRTC STUN（防止真实IP泄露）
-  - DOMAIN-SUFFIX,stun.l.google.com,REJECT
-  - DOMAIN-SUFFIX,stun1.l.google.com,REJECT
-  - DOMAIN-SUFFIX,stun2.l.google.com,REJECT
-  - DOMAIN-SUFFIX,stun3.l.google.com,REJECT
-  - DOMAIN-SUFFIX,stun4.l.google.com,REJECT
-
-  # 2. 强制代理类
-  # Google/YouTube 强制代理
+  # 1. Google / YouTube / Gemini 强制代理
   - DOMAIN-SUFFIX,google.com,🚀 节点选择
   - DOMAIN-SUFFIX,google.co.jp,🚀 节点选择
   - DOMAIN-SUFFIX,googleapis.com,🚀 节点选择
-  - DOMAIN-SUFFIX,googleapis.cn,🚀 节点选择
   - DOMAIN-SUFFIX,googlevideo.com,🚀 节点选择
   - DOMAIN-SUFFIX,googleusercontent.com,🚀 节点选择
   - DOMAIN-SUFFIX,gstatic.com,🚀 节点选择
   - DOMAIN-SUFFIX,ggpht.com,🚀 节点选择
-  - DOMAIN-SUFFIX,google.cn,🚀 节点选择
-  - DOMAIN-SUFFIX,gemini.google.com,🚀 节点选择
-  - DOMAIN-SUFFIX,ai.google.com,🚀 节点选择
-  - DOMAIN-KEYWORD,google,🚀 节点选择
-  - DOMAIN-KEYWORD,gmail,🚀 节点选择
+  - DOMAIN-SUFFIX,gmail.com,🚀 节点选择
+  - DOMAIN-SUFFIX,youtube.com,🚀 节点选择
+  - DOMAIN-SUFFIX,ytimg.com,🚀 节点选择
   - DOMAIN-KEYWORD,youtube,🚀 节点选择
   - DOMAIN-KEYWORD,gemini,🚀 节点选择
-  - DOMAIN-SUFFIX,xn--ngstr-lra8j.com,🚀 节点选择
-  - DOMAIN-SUFFIX,services.googleapis.cn,🚀 节点选择
-  - RULE-SET,google_cn_proxy,🚀 节点选择
 
-  # 3. 直连类
-  # 本地网络
+  # 2. 本地网
   - RULE-SET,local_area_network,直连
-  - RULE-SET,unban,直连
-  # 中国域名和媒体
+
+  # 3. 中国域名直连
   - RULE-SET,china_domain,直连
   - RULE-SET,china_media,直连
 
-  # 4. IP 兜底（需要 DNS 解析）
-  # 中国IP
+  # 4. 广告拦截
+  - RULE-SET,ban_ad,REJECT
+  - RULE-SET,ban_program_ad,REJECT
+
+  # 5. 中国 IP
   - RULE-SET,china_company_ip,直连,no-resolve
   - RULE-SET,china_ip,直连,no-resolve
-  # GeoIP兜底
   - GEOIP,CN,直连,no-resolve
-  
-  # 5. 最终兜底
+
+  # 6. 最终兜底 → 走代理
   - MATCH,🚀 节点选择
 
 # =========================

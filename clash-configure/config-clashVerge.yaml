@@ -23,23 +23,29 @@ bind-address: "*"
 mode: rule
 log-level: info
 ipv6: false
-
-# 【优化】开启 TCP 并发，显著降低握手延迟
 tcp-concurrent: true
-
-# 【优化】模拟 TLS 指纹，防止被某些服务端识别为代理工具
 global-client-fingerprint: chrome
 
 # =========================
-# DNS 配置 (防泄露核心)
+# TUN 模式（关键修复：接管系统全部流量）
+# =========================
+tun:
+  enable: true
+  stack: mixed
+  dns-hijack:
+    - "any:53"
+    - "tcp://any:53"
+  auto-route: true
+  auto-detect-interface: true
+
+# =========================
+# DNS 配置（关键修复：防止DNS泄露）
 # =========================
 dns:
   enable: true
   listen: 0.0.0.0:53
   enhanced-mode: fake-ip
   fake-ip-range: 198.18.0.1/16
-  
-  # 【优化】防止系统连接检测误报，导致无法联网
   fake-ip-filter:
     - "*.lan"
     - "*.localdomain"
@@ -47,59 +53,84 @@ dns:
     - "*.local"
     - "msftconnecttest.com"
     - "msftncsi.com"
-    - "succ.html"
+    - "*.msftconnecttest.com"
+    - "*.msftncsi.com"
+    - "+.ntp.org"
     - "time.*.com"
     - "time.*.gov"
     - "time.*.edu.cn"
     - "time.*.apple.com"
-  
-  # 默认 DNS (用于解析 DoH 域名的 IP)
+    - "ntp.*.com"
   default-nameserver:
     - 223.5.5.5
     - 119.29.29.29
-    - 1.1.1.1
-
-  # 国内域名 DNS (建议使用阿里和腾讯的 DoH，防止 53 端口劫持)
+  # 【修复核心】使用策略性DNS：国内域名用国内DNS，国外域名用代理远端DNS
   nameserver:
-    - 223.5.5.5
-    - 119.29.29.29
     - https://dns.alidns.com/dns-query
     - https://doh.pub/dns-query
-
-  # 国外域名 fallback (当国内 DNS 解析结果是污染 IP 时回退到这里)
-  fallback:
+  # 【关键】代理DNS - 通过代理节点去解析，防止中转节点泄露
+  proxy-server-nameserver:
     - https://dns.google/dns-query
-    - https://1.1.1.1/dns-query
-    - tls://8.8.4.4:853
-
+    - https://dns.cloudflare.com/dns-query
+  fallback:
+    - "https://dns.google/dns-query#🚀 节点选择"
+    - "https://1.1.1.1/dns-query#🚀 节点选择"
+    - "tls://8.8.4.4:853#🚀 节点选择"
   fallback-filter:
     geoip: true
     geoip-code: CN
+    geosite:
+      - gfw
     ipcidr:
       - 240.0.0.0/4
       - 0.0.0.0/32
-
+      - 127.0.0.1/8
+  # 【关键修复】指定国内域名走国内DNS，其他走fallback
   nameserver-policy:
-    # 对于国内主流域名和私有地址，强制使用国内 DNS
     "geosite:cn,private":
-      - 223.5.5.5
       - https://dns.alidns.com/dns-query
-    # 对于容易被污染或强制走代理的域名，强制走远端解析
-    "geosite:google,youtube,telegram,gfw":
+      - https://doh.pub/dns-query
+    "geosite:google,youtube,telegram,gfw,geolocation-!cn":
       - "https://dns.google/dns-query#🚀 节点选择"
       - "https://dns.cloudflare.com/dns-query#🚀 节点选择"
 
 # =========================
-# 代理节点 (此处需要保留你订阅中的节点)
+# Sniffer 域名嗅探（关键修复：还原fake-ip对应的真实域名）
+# =========================
+sniffer:
+  enable: true
+  force-dns-mapping: true
+  parse-pure-ip: true
+  override-destination: true
+  sniff:
+    HTTP:
+      ports: [80, 8080-8880]
+      override-destination: true
+    TLS:
+      ports: [443, 8443]
+    QUIC:
+      ports: [443, 8443]
+  force-domain:
+    - "+.google.com"
+    - "+.googleapis.com"
+    - "+.googlevideo.com"
+    - "+.youtube.com"
+    - "+.gemini.google.com"
+  skip-domain:
+    - "Mijia Cloud"
+    - "+.push.apple.com"
+
+# =========================
+# 代理节点
 # =========================
 proxies:
-  # ⚠️ 请确保这里有你的机场节点，或者由外部订阅管理
   - name: "直连"
     type: direct
 
+# =========================
 # 代理组配置
+# =========================
 proxy-groups:
-  # 主要节点选择组
   - name: 🚀 节点选择
     type: select
     proxies:
@@ -109,81 +140,52 @@ proxy-groups:
       - 🇯🇵 日本-自动
       - 🇺🇸 美国-自动
       - 直连
-    use:
-      - NaiUNet
-      - XMRth
-      - niceCloud
-      - gwYunDong
-
-  # 新加坡自动选择
+    include-all: true
+  
   - name: 🇸🇬 新加坡-自动
     type: url-test
-    use:
-      - NaiUNet
-      - XMRth
-      - niceCloud
-      - gwYunDong
-    filter: "(?i)(新加坡|SG|坡|狮城|Singapore)"
+    include-all: true
+    filter: "(?i)(广新|新加坡|SG|坡|狮城|🇸🇬|Singapore)"
     url: http://www.gstatic.com/generate_204
     interval: 300
     tolerance: 50
-    timeout: 50
+    timeout: 5000
   
-  # 香港自动选择
   - name: 🇭🇰 香港-自动
     type: url-test
-    use:
-      - NaiUNet
-      - XMRth
-      - niceCloud
-      - gwYunDong
-    filter: "(?i)(香港|HK|Hong Kong|HongKong)"
+    include-all: true
+    filter: "(?i)(广港|香港|HK|Hong Kong|🇭🇰|HongKong)"
     url: http://www.gstatic.com/generate_204
     interval: 300
     tolerance: 50
-    timeout: 50
+    timeout: 5000
   
-  # 台湾自动选择
   - name: 🇨🇳 台湾-自动
     type: url-test
-    use:
-      - NaiUNet
-      - XMRth
-      - niceCloud
-      - gwYunDong
-    filter: "(?i)(台湾|台灣|TW|Taiwan)"
+    include-all: true
+    filter: "(?i)(广台|台湾|台灣|TW|Tai Wan|🇹🇼|🇨🇳|TaiWan|Taiwan)"
     url: http://www.gstatic.com/generate_204
     interval: 300
     tolerance: 50
-    timeout: 50
+    timeout: 5000
   
-  # 日本自动选择
   - name: 🇯🇵 日本-自动
     type: url-test
-    use:
-      - NaiUNet
-      - XMRth
-      - niceCloud
-      - gwYunDong
-    filter: "(?i)(日本|JP|东京|大阪|Japan)"
+    include-all: true
+    filter: "(?i)(广日|日本|JP|川日|东京|大阪|泉日|埼玉|沪日|深日|🇯🇵|Japan)"
     url: http://www.gstatic.com/generate_204
     interval: 300
     tolerance: 50
-    timeout: 50
+    timeout: 5000
   
-  # 美国自动选择
   - name: 🇺🇸 美国-自动
     type: url-test
-    use:
-      - NaiUNet
-      - XMRth
-      - niceCloud
-      - gwYunDong
-    filter: "(?i)(美|US|纽约|洛杉|United States)"
+    include-all: true
+    filter: "(?i)(广美|美|US|纽约|波特兰|达拉斯|俄勒|凤凰城|费利蒙|硅谷|拉斯|洛杉|圣何塞|圣克拉|西雅|芝加|🇺🇸|United States)"
     url: http://www.gstatic.com/generate_204
     interval: 300
     tolerance: 50
-    timeout: 50
+    timeout: 5000
 
 # =========================
 # 规则部分
